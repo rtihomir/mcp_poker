@@ -1,0 +1,192 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Holdem Poker Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f0f0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .login-container, .tables-container, .game-container {
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .hidden {
+      display: none;
+    }
+    .table-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 15px;
+    }
+    .table-card {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .table-card:hover {
+      background-color: #f9f9f9;
+    }
+    .poker-table {
+      background-color: #277a2a;
+      border-radius: 200px;
+      width: 800px;
+      height: 400px;
+      margin: 0 auto;
+      position: relative;
+      color: white;
+    }
+    .community-cards {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      gap: 10px;
+    }
+    .card {
+      width: 60px;
+      height: 90px;
+      background-color: white;
+      border-radius: 5px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: black;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .player-seat {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      background-color: rgba(0,0,0,0.5);
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+    }
+    .player-seat.active {
+      box-shadow: 0 0 15px 5px gold;
+    }
+    .pot {
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    input {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    .player-hand {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .red {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Holdem Poker Game</h1>
+    
+    <div id="loginContainer" class="login-container">
+      <h2>Login</h2>
+      <div>
+        <input type="text" id="playerName" placeholder="Enter your name">
+        <button id="loginBtn">Login</button>
+      </div>
+    </div>
+    
+    <div id="tablesContainer" class="tables-container hidden">
+      <h2>Available Tables</h2>
+      <button id="refreshTablesBtn">Refresh Tables</button>
+      <button id="createTableBtn">Create New Table</button>
+      <div id="tableList" class="table-list"></div>
+    </div>
+    
+    <div id="createTableContainer" class="tables-container hidden">
+      <h2>Create New Table</h2>
+      <div>
+        <input type="text" id="tableName" placeholder="Table Name">
+        <input type="number" id="smallBlind" placeholder="Small Blind" value="5">
+        <input type="number" id="bigBlind" placeholder="Big Blind" value="10">
+        <input type="number" id="maxPlayers" placeholder="Max Players" value="9">
+        <button id="submitTableBtn">Create</button>
+        <button id="cancelTableBtn">Cancel</button>
+      </div>
+    </div>
+    
+    <div id="gameContainer" class="game-container hidden">
+      <h2 id="tableNameText">Table Name</h2>
+      <div id="game-stage" class="game-stage"></div>
+      <div class="poker-table">
+        <div class="pot" id="pot">Pot: $0</div>
+        <div class="community-cards" id="communityCards"></div>
+        <!-- Player seats will be added dynamically -->
+      </div>
+      
+      <div class="player-hand" id="playerHand"></div>
+      
+      <div class="actions" id="actions">
+        <button id="foldBtn" disabled>Fold</button>
+        <button id="checkBtn" disabled>Check</button>
+        <button id="callBtn" disabled>Call</button>
+        <button id="betBtn" disabled>Bet</button>
+        <input type="number" id="betAmount" placeholder="Bet Amount" min="0" step="5">
+        <button id="raiseBtn" disabled>Raise</button>
+        <button id="leaveTableBtn">Leave Table</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- No changes needed in the script tag if outDir remains the same -->
+  <!-- Change this line in your HTML file -->
+  <script src="/js/poker-client.js" type="module"></script>
+</body>
+</html>
