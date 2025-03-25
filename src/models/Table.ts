@@ -28,6 +28,9 @@ export class Table {
   stage: GameStage = GameStage.WAITING;
   maxPlayers: number;
   minPlayers: number = 2;
+  // Add timer properties
+  private actionTimer: NodeJS.Timeout | null = null;
+  private actionTimeoutSeconds: number = 30;
   
   constructor(id: string, name: string, smallBlind: number = 5, bigBlind: number = 10, maxPlayers: number = 9) {
     this.id = id;
@@ -80,8 +83,11 @@ export class Table {
     this.pot = 0;
     this.currentBet = 0;
     
-    // Reset player hands
-    this.players.forEach(player => player.resetHand());
+    // Reset player hands and action flags
+    this.players.forEach(player => {
+      player.resetHand();
+      player.hasActedThisStage = false;
+    });
     
     // Move dealer button
     this.dealerPosition = (this.dealerPosition + 1) % this.players.length;
@@ -108,12 +114,15 @@ export class Table {
         }
       }
     }
+
     
     // Set first player to act (after big blind)
     this.currentPlayerIndex = (bigBlindPos + 1) % this.players.length;
     this.players[this.currentPlayerIndex].isActive = true;
     
     this.stage = GameStage.PRE_FLOP;
+
+    this.setActionTimer();
   }
 
   handlePlayerAction(playerId: string, action: PlayerAction, amount: number = 0): boolean {
@@ -206,6 +215,8 @@ export class Table {
         return false;
     }
     
+    // Mark that this player has acted in this stage
+    player.hasActedThisStage = true;
     player.isActive = false;
     
     // Move to next player or next stage
@@ -218,6 +229,32 @@ export class Table {
   }
 
   moveToNextPlayer(): void {
+    // Clear previous timer
+    this.clearActionTimer();
+    
+    // Check if only one player remains (not folded)
+    const activePlayers = this.players.filter(p => !p.folded);
+    if (activePlayers.length === 1) {
+      console.log("Only one player remains, they win automatically");
+      // Award pot to the last remaining player
+      activePlayers[0].chips += this.pot;
+      this.pot = 0;
+      
+      // Move to showdown to end the round
+      this.stage = GameStage.SHOWDOWN;
+      
+      // Broadcast the update so players can see the winner
+      broadcastTableUpdate(this.id);
+      
+      // Start a new game after a delay
+      console.log("Starting new game in 5 seconds");
+      setTimeout(() => {
+        this.startGame();
+        broadcastTableUpdate(this.id);
+      }, 5000);
+      return;
+    }
+    
     // Check if round is complete
     if (this.isRoundComplete()) {
       console.log("Round is complete, move to next state");
@@ -244,6 +281,54 @@ export class Table {
     
     this.currentPlayerIndex = nextPlayerIndex;
     this.players[this.currentPlayerIndex].isActive = true;
+    
+    // Set action timeout for current player
+    this.setActionTimer();
+    
+    // Broadcast update to let clients know whose turn it is
+    broadcastTableUpdate(this.id);
+  }
+
+  // Add method to set the timer
+  // Add a property to track when the timer started
+  private actionTimerStartTime: number = 0;
+  
+  // Modify setActionTimer method to record start time
+  private setActionTimer(): void {
+    console.log('setActionTimer')
+    // Make sure to clear previous timer first
+    this.clearActionTimer();
+    
+    // Record the start time
+    this.actionTimerStartTime = Date.now();
+    
+    // Set new timer
+    this.actionTimer = setTimeout(() => {
+      // If timer triggers, perform automatic action
+      if (this.currentPlayerIndex >= 0 && this.currentPlayerIndex < this.players.length) {
+        const player = this.players[this.currentPlayerIndex];
+        console.log(`Player ${player.name} (${player.id}) timeout, performing auto action`);
+        
+        // Try to Check first, if not possible then Fold
+        const canCheck = player.bet >= this.currentBet;
+        
+        if (canCheck) {
+          console.log(`Auto checking for player ${player.name}`);
+          this.handlePlayerAction(player.id, PlayerAction.CHECK);
+        } else {
+          console.log(`Auto folding for player ${player.name}`);
+          this.handlePlayerAction(player.id, PlayerAction.FOLD);
+        }
+      }
+    }, this.actionTimeoutSeconds * 1000);
+  }
+  
+  // Add method to clear the timer
+  private clearActionTimer(): void {
+    if (this.actionTimer) {
+      clearTimeout(this.actionTimer);
+      this.actionTimer = null;
+    }
   }
 
   isRoundComplete(): boolean {
@@ -253,6 +338,14 @@ export class Table {
       return true;
     }
     
+    // Make sure all non-folded players have had a chance to act in this stage
+    const nonFoldedPlayers = this.players.filter(p => !p.folded);
+    const allPlayersHaveActed = nonFoldedPlayers.every(p => p.hasActedThisStage || p.isAllIn);
+    
+    if (!allPlayersHaveActed) {
+      return false;
+    }
+
     // Check if all remaining players have bet the same amount or are all-in
     return this.players.every(p => 
       p.folded || 
@@ -282,6 +375,7 @@ export class Table {
       p.isActive = false;
       p.isChecked = false; // Reset isChecked when moving to next stage
       p.bet = 0; // Reset player bets when moving to next stage
+      p.hasActedThisStage = false; // Reset hasActedThisStage flag for the new stage
     });
     
     // Reset the current bet for the new betting round
@@ -334,7 +428,6 @@ export class Table {
         
       case GameStage.SHOWDOWN:
         // Start new game
-
         return;
     }
     
@@ -356,6 +449,12 @@ export class Table {
     }
     
     this.players[this.currentPlayerIndex].isActive = true;
+    
+    // Set action timeout for the current player after moving to next stage
+    this.setActionTimer();
+    
+    // Broadcast the update so clients know whose turn it is
+    broadcastTableUpdate(this.id);
   }
 
   determineWinner(): void {
@@ -403,6 +502,15 @@ export class Table {
     }
   }
 
+  // Add method to get remaining time
+  private getRemainingActionTime(): number {
+    if (!this.actionTimer) return 0;
+    
+    const elapsedTime = (Date.now() - this.actionTimerStartTime) / 1000;
+    return Math.max(0, this.actionTimeoutSeconds - elapsedTime);
+  }
+
+  // Update toJSON to include the timer information
   toJSON() {
     return {
       id: this.id,
@@ -416,7 +524,9 @@ export class Table {
       dealerPosition: this.dealerPosition,
       currentPlayerIndex: this.currentPlayerIndex,
       stage: this.stage,
-      maxPlayers: this.maxPlayers
+      maxPlayers: this.maxPlayers,
+      // Add remaining action time
+      remainingActionTime: this.getRemainingActionTime()
     };
   }
 }

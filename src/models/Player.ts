@@ -22,6 +22,7 @@ export class Player {
   isBigBlind: boolean = false;
   isActive: boolean = false;
   isChecked: boolean = false;
+  hasActedThisStage: boolean = false;
   
   constructor(id: string, name: string, initialChips: number = 1000) {
     this.id = id;

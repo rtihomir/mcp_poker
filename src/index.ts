@@ -92,29 +92,7 @@ export function broadcastTableUpdate(tableId: string): void {
   console.log(`Broadcasting table update for table ${tableId}`);
   const table = gameManager.getTable(tableId);
   if (table) {
-    io.to(`table:${tableId}`).emit('tableUpdate', {
-      id: table.id,
-      name: table.name,
-      stage: table.stage,
-      pot: table.pot,
-      currentBet: table.currentBet,
-      smallBlind: table.smallBlind,
-      bigBlind: table.bigBlind,
-      communityCards: table.communityCards.map(card => card.toString()),
-      players: table.players.map(p => ({
-        id: p.id,
-        name: p.name,
-        chips: p.chips,
-        bet: p.bet,
-        folded: p.folded,
-        isAllIn: p.isAllIn,
-        isDealer: p.isDealer,
-        isSmallBlind: p.isSmallBlind,
-        isBigBlind: p.isBigBlind,
-        isActive: p.isActive,
-        hand: p.hand ? p.hand.map(card => card.toString()) : undefined
-      })),
-      currentPlayerIndex: table.currentPlayerIndex
-    });
+    // Use the table's toJSON method instead of manually constructing the object
+    io.to(`table:${tableId}`).emit('tableUpdate', table.toJSON());
   }
 }

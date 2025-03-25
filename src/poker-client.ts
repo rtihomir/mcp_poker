@@ -36,6 +36,7 @@ interface TableState {
   bigBlind: number;
   stage: string;
   maxPlayers: number;
+  remainingActionTime?: number; // Add this field to receive the timer from server
 }
 
 interface TableInfo {
@@ -51,6 +52,16 @@ interface TableInfo {
 let player: Player | null = null;
 let currentTable: string | null = null;
 let currentTableState: TableState | null = null;
+
+// Add countdown timer variables
+let countdownTimer: number | null = null;
+let countdownValue: number = 0;
+
+// Add countdown element reference
+const countdownElement = document.createElement('div');
+countdownElement.className = 'countdown-timer';
+countdownElement.style.display = 'none';
+document.body.appendChild(countdownElement);
 
 // DOM elements
 const loginContainer = document.getElementById('loginContainer') as HTMLDivElement;
@@ -256,34 +267,6 @@ async function joinTable(tableId: string): Promise<void> {
   }
 }
 
-// Leave table
-async function leaveTable(): Promise<void> {
-  if (!currentTable) return;
-  
-  try {
-    const result = await sendPokerRequest('leaveTable', {
-      playerId: player?.playerId
-    });
-    
-    if (result.success) {
-      // Unsubscribe from table updates
-      socket.emit('unsubscribe', currentTable);
-      
-      // Reset table state variables
-      currentTable = null;
-      currentTableState = null;
-      
-      // Show tables view
-      gameContainer.classList.add('hidden');
-      tablesContainer.classList.remove('hidden');
-      
-      // Refresh tables with a slight delay to ensure server has processed the leave
-      setTimeout(fetchTables, 500);
-    }
-  } catch (error: any) {
-    alert(`Failed to leave table: ${error.message}`);
-  }
-}
 
 // Perform action
 async function performAction(action: string, amount: number = 0): Promise<void> {
@@ -357,6 +340,7 @@ function renderTableState(tableState: TableState): void {
   
   // Update pot
   potElement.textContent = `Pot: $${tableState.pot}`;
+  
   
   // Update game stage
   const stageElement = document.getElementById('game-stage');
@@ -479,4 +463,131 @@ function renderTableState(tableState: TableState): void {
     betAmountInput.min = minRaise.toString();
     betAmountInput.value = minRaise.toString();
   }
+
+
+  // Handle countdown timer
+  
+  // Clear any existing countdown
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+  
+  // If it's player's turn and we have remaining time info, show countdown
+  if (isPlayerTurn && tableState.remainingActionTime && tableState.remainingActionTime > 0) {
+    countdownValue = Math.ceil(tableState.remainingActionTime);
+    updateCountdownDisplay();
+    
+    countdownTimer = window.setInterval(() => {
+      countdownValue--;
+      if (countdownValue <= 0) {
+        clearInterval(countdownTimer!);
+        countdownTimer = null;
+      }
+      updateCountdownDisplay();
+    }, 1000);
+  } else {
+    // Hide countdown if it's not player's turn
+    countdownElement.style.display = 'none';
+  }
 }
+
+// Add function to update countdown display
+function updateCountdownDisplay(): void {
+  if (countdownValue <= 0) {
+    countdownElement.style.display = 'none';
+    return;
+  }
+  
+  countdownElement.style.display = 'block';
+  
+  // Position the countdown near the action buttons
+  const actionButtons = document.querySelector('.action-buttons');
+  if (actionButtons) {
+    const rect = actionButtons.getBoundingClientRect();
+    countdownElement.style.position = 'absolute';
+    countdownElement.style.top = `${rect.top - 60}px`;
+    countdownElement.style.left = `${rect.left}px`;
+  }
+  
+  // Update the content with countdown value
+  let content = `<div class="time-remaining ${countdownValue <= 10 ? 'urgent' : ''}">
+    Time remaining: ${countdownValue}s
+  </div>`;
+  
+  // Add warning message when time is running low
+  if (countdownValue <= 10) {
+    content += `<div class="warning-message">
+      Warning: Make your move soon or it will be auto-played!
+    </div>`;
+  }
+  
+  countdownElement.innerHTML = content;
+}
+
+// Add cleanup when leaving table
+async function leaveTable(): Promise<void> {
+  if (!currentTable) return;
+  
+  // Clear countdown timer when leaving table
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+  
+  try {
+    const result = await sendPokerRequest('leaveTable', {
+      playerId: player?.playerId
+    });
+    
+    if (result.success) {
+      // Unsubscribe from table updates
+      socket.emit('unsubscribe', currentTable);
+      
+      // Reset table state variables
+      currentTable = null;
+      currentTableState = null;
+      
+      // Show tables view
+      gameContainer.classList.add('hidden');
+      tablesContainer.classList.remove('hidden');
+      
+      // Refresh tables with a slight delay to ensure server has processed the leave
+      setTimeout(fetchTables, 500);
+    }
+  } catch (error: any) {
+    alert(`Failed to leave table: ${error.message}`);
+  }
+}
+
+// Add some CSS to the document
+const style = document.createElement('style');
+style.textContent = `
+  .countdown-timer {
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 5px;
+    color: white;
+    margin: 10px 0;
+    text-align: center;
+    z-index: 1000;
+  }
+  .time-remaining {
+    font-size: 18px;
+    font-weight: bold;
+  }
+  .time-remaining.urgent {
+    color: red;
+    animation: pulse 1s infinite;
+  }
+  .warning-message {
+    color: red;
+    margin-top: 5px;
+  }
+  @keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+  }
+`;
+document.head.appendChild(style);

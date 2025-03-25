@@ -335,14 +335,7 @@ export class PokerServer {
     return {
       result: {
         success: true,
-        tableState: table ? {
-          id: table.id,
-          stage: table.stage,
-          pot: table.pot,
-          currentBet: table.currentBet,
-          communityCards: table.communityCards.map(card => card.toString()),
-          currentPlayerIndex: table.currentPlayerIndex
-        } : null
+        tableState: table ? table.toJSON(): null
       },
       id
     };
