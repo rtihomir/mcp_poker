@@ -100,6 +100,29 @@ export class PokerServer {
       };
     }
     
+    // Check if a player with this name already exists
+    let existingPlayer: Player | undefined;
+    for (const player of this.players.values()) {
+      if (player.name === name) {
+        existingPlayer = player;
+        break;
+      }
+    }
+    
+    if (existingPlayer) {
+      // Return the existing player instead of creating a new one
+      console.log(`Player with name ${name} already exists, returning existing player`);
+      return {
+        result: {
+          playerId: existingPlayer.id,
+          name: existingPlayer.name,
+          chips: existingPlayer.chips
+        },
+        id
+      };
+    }
+    
+    // Create a new player if no existing player was found
     const playerId = `player_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const initialChips = chips || 1000;
     
