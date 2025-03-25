@@ -25,7 +25,7 @@ export class PokerServer {
   }
   
   handleRequest(request: PokerRequest): PokerResponse {
-    console.log(`[MCP] Received request: ${JSON.stringify(request)}`);
+    console.log(`[PokerServer] Received request: ${JSON.stringify(request)}`);
     
     try {
       const { method, params, id } = request;
@@ -69,7 +69,7 @@ export class PokerServer {
         },
         id: request.id
       };
-      console.error(`[MCP] Error processing request: ${error}`);
+      console.error(`[PokerServer] Error processing request: ${error}`);
       return this.logResponse(response);
     }
   }
@@ -83,7 +83,7 @@ export class PokerServer {
       logSafeResponse.result = '(Result object - see full response for details)';
     }
     
-    console.log(`[MCP] Sending response: ${JSON.stringify(logSafeResponse)}`);
+    console.log(`[PokerServer] Sending response: ${JSON.stringify(logSafeResponse)}`);
     return response;
   }
   

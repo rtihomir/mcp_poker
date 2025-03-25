@@ -1,2 +1,5 @@
 dist/
 public/js/poker-client.js
+.vercel
+.env
+vercel.json
