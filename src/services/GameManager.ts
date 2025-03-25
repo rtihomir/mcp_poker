@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { Player } from '../models/Player';
 import { Table } from '../models/Table';
 import { HandEvaluator } from './HandEvaluator';
+import { broadcastPlayerAction } from '../index';
 
 export class GameManager {
   private tables: Map<string, Table> = new Map();
@@ -93,6 +94,9 @@ export class GameManager {
     try {
       // Add error handling to get more information about failures
       const result = table.handlePlayerAction(playerId, action as any, amount);
+      if (result) {
+        broadcastPlayerAction(table.id, playerId, action, amount);
+      }
       return result;
     } catch (error) {
       console.error(`Error performing action ${action} for player ${playerId}:`, error);

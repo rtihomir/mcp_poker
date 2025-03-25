@@ -1,6 +1,7 @@
 import { Card } from './Card';
 import { Deck } from './Deck';
 import { Player, PlayerAction } from './Player';
+import { HandEvaluator, HandResult } from '../services/HandEvaluator';
 
 import { broadcastTableUpdate } from '../index';
 
@@ -458,18 +459,55 @@ export class Table {
   }
 
   determineWinner(): void {
-    // This is a simplified version - in a real implementation, you'd evaluate poker hands
-    // For now, we'll just pick a random winner from non-folded players
+    // Get all active (non-folded) players
     const activePlayers = this.players.filter(p => !p.folded);
     
     if (activePlayers.length === 1) {
       // Only one player left, they win
       activePlayers[0].chips += this.pot;
+      console.log(`Player ${activePlayers[0].name} wins ${this.pot} chips as the only remaining player`);
     } else {
-      // Randomly select a winner for now
-      // In a real implementation, you'd evaluate poker hands
-      const winner = activePlayers[Math.floor(Math.random() * activePlayers.length)];
-      winner.chips += this.pot;
+      // Evaluate hands for all active players
+      const playerHands: { player: Player; handResult: HandResult }[] = [];
+      
+      for (const player of activePlayers) {
+        const handResult = HandEvaluator.evaluateHand(player.hand, this.communityCards);
+        playerHands.push({ player, handResult });
+        console.log(`${player.name}'s hand: ${handResult.description}`);
+      }
+      
+      // Sort by hand strength (highest first)
+      playerHands.sort((a, b) => 
+        HandEvaluator.compareHands(b.handResult, a.handResult)
+      );
+      
+      // Check for ties
+      const winners: { player: Player; handResult: HandResult }[] = [playerHands[0]];
+      
+      for (let i = 1; i < playerHands.length; i++) {
+        if (HandEvaluator.compareHands(playerHands[0].handResult, playerHands[i].handResult) === 0) {
+          winners.push(playerHands[i]);
+        } else {
+          break; // No more ties
+        }
+      }
+      
+      // Split pot among winners
+      const winAmount = Math.floor(this.pot / winners.length);
+      const remainder = this.pot % winners.length;
+      
+      for (const winner of winners) {
+        winner.player.chips += winAmount;
+      }
+      
+      // Add remainder to first winner (can't split odd chips evenly)
+      if (remainder > 0) {
+        winners[0].player.chips += remainder;
+      }
+      
+      // Log the winners
+      const winnerNames = winners.map(w => `${w.player.name} (${w.handResult.description})`).join(', ');
+      console.log(`Winners: ${winnerNames} each win ${winAmount} chips`);
     }
     
     this.pot = 0;

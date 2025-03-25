@@ -49,6 +49,16 @@ interface TableInfo {
   stage: string;
 }
 
+// Add interface for player action data
+interface PlayerActionData {
+  playerId: string;
+  playerName: string;
+  action: string;
+  amount: number;
+  message: string;
+  timestamp: number;
+}
+
 let player: Player | null = null;
 let currentTable: string | null = null;
 let currentTableState: TableState | null = null;
@@ -105,6 +115,28 @@ betBtn.addEventListener('click', () => performAction('bet', parseInt(betAmountIn
 raiseBtn.addEventListener('click', () => performAction('raise', parseInt(betAmountInput.value)));
 
 // Socket event listeners
+
+socket.on('playerAction', (actionData: PlayerActionData) => {
+  // Display a notification with the action message
+  showNotification(actionData.message);
+});
+
+// Example notification function
+function showNotification(message:string) {
+  const notification = document.createElement('div');
+  notification.className = 'action-notification';
+  notification.textContent = message;
+  
+  // Add to notification area
+  document.querySelector('.notification-area')?.appendChild(notification);
+  
+  // Auto-remove after a few seconds
+  setTimeout(() => {
+    notification.classList.add('fade-out');
+    setTimeout(() => notification.remove(), 500);
+  }, 3000);
+}
+
 socket.on('tableUpdate', handleTableUpdate);
 
 // Helper functions for MCP API
