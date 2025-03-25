@@ -331,7 +331,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 function formatTableState(tableState: any): string {
   if (!tableState) return "No table state available.";
   
-  let result = `Table: ${tableState.name}\n`;
+  let result = `Table: ${tableState.name} (ID: ${tableState.id})\n`;
   result += `Stage: ${tableState.stage}\n`;
   result += `Pot: $${tableState.pot}\n`;
   result += `Current Bet: $${tableState.currentBet}\n`;
