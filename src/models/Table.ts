@@ -30,7 +30,7 @@ export class Table {
   minPlayers: number = 2;
   // Add timer properties
   private actionTimer: NodeJS.Timeout | null = null;
-  private actionTimeoutSeconds: number = 30;
+  private actionTimeoutSeconds: number = 120;
   
   constructor(id: string, name: string, smallBlind: number = 5, bigBlind: number = 10, maxPlayers: number = 9) {
     this.id = id;

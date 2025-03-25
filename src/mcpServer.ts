@@ -141,6 +141,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function pollUntilPlayerActive(player_id:unknown, table_id:unknown) {
+    let tableState = null;
+    let counter = 0;
+    while(true) {
+        tableState = await sendPokerRequest('getTableState', { 
+            playerId: player_id,
+            tableId: table_id 
+        });
+        counter ++;
+        if (counter > 120) {
+            break
+        }
+        
+        const currentPlayer = tableState.players.find((p: any) => p.isActive);
+        if (currentPlayer && currentPlayer.id === player_id) {
+            break;
+        }
+        await sleep(1000);
+    }
+
+    if (tableState === null) {
+        return '';
+    }
+
+    return formatTableState(tableState);
+}
 function sendPokerRequest(method: string, params: any): Promise<any> {
   return new Promise((resolve, reject) => {
     const request = {
@@ -192,11 +222,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       view_text = `Player ${args?.player_id} joined table ${args?.table_id}.\n Game state:\n`;
       
       // Get table state after joining
-      const tableState = await sendPokerRequest('getTableState', { 
-        playerId: args?.player_id,
-        tableId: args?.table_id 
-      });
-      view_text += formatTableState(tableState);
+      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
     } 
     else if (request.params.name === "get_table_status") {
       // Get the current state of the table
@@ -224,11 +250,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       view_text = `Player ${args?.player_id} action: Check\n Game state:\n`;
       
       // Get updated table state
-      const tableState = await sendPokerRequest('getTableState', {
-        playerId: args?.player_id,
-        tableId: args?.table_id
-      });
-      view_text += formatTableState(tableState);
+      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
     } 
     else if (request.params.name === "action_fold") {
       response = await sendPokerRequest('performAction', { 
@@ -239,11 +261,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       view_text = `Player ${args?.player_id} action: Fold\n Game state:\n`;
       
       // Get updated table state
-      const tableState = await sendPokerRequest('getTableState', {
-        playerId: args?.player_id,
-        tableId: args?.table_id
-      });
-      view_text += formatTableState(tableState);
+      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
     } 
     else if (request.params.name === "action_bet") {
       response = await sendPokerRequest('performAction', { 
@@ -255,11 +273,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       view_text = `Player ${args?.player_id} action: Bet $${args?.amount}\n Game state:\n`;
       
       // Get updated table state
-      const tableState = await sendPokerRequest('getTableState', {
-        playerId: args?.player_id,
-        tableId: args?.table_id
-      });
-      view_text += formatTableState(tableState);
+      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
     } 
     else if (request.params.name === "action_raise") {
       response = await sendPokerRequest('performAction', { 
@@ -271,11 +285,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       view_text = `Player ${args?.player_id} action: Raise to $${args?.amount}\n Game state:\n`;
       
       // Get updated table state
-      const tableState = await sendPokerRequest('getTableState', {
-        playerId: args?.player_id,
-        tableId: args?.table_id
-      });
-      view_text += formatTableState(tableState);
+      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
     } 
     else if (request.params.name === "action_call") {
       response = await sendPokerRequest('performAction', { 
@@ -286,11 +296,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       view_text = `Player ${args?.player_id} action: Call\n Game state:\n`;
       
       // Get updated table state
-      const tableState = await sendPokerRequest('getTableState', {
-        playerId: args?.player_id,
-        tableId: args?.table_id
-      });
-      view_text += formatTableState(tableState);
+      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
     } 
     else {
       throw new McpError(ErrorCode.InternalError, "Tool not found");
