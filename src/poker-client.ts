@@ -74,6 +74,7 @@ countdownElement.style.display = 'none';
 document.body.appendChild(countdownElement);
 
 // DOM elements
+const container = document.getElementById('container') as HTMLDivElement;
 const loginContainer = document.getElementById('loginContainer') as HTMLDivElement;
 const tablesContainer = document.getElementById('tablesContainer') as HTMLDivElement;
 const createTableContainer = document.getElementById('createTableContainer') as HTMLDivElement;
@@ -290,6 +291,8 @@ async function joinTable(tableId: string): Promise<void> {
       // Show game view
       tablesContainer.classList.add('hidden');
       gameContainer.classList.remove('hidden');
+
+      container.classList.add('hide-title');
       
       // Render table state
       renderTableState(tableState);
@@ -382,7 +385,7 @@ function renderTableState(tableState: TableState): void {
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
-    stageElement.textContent = `Stage: ${stageName}`;
+    stageElement.textContent = `${tableState.name}: ${stageName}`;
   }
   
   // Update community cards
@@ -431,16 +434,33 @@ function renderTableState(tableState: TableState): void {
   }
   
   // Update player seats
-  const pokerTable = document.querySelector('.poker-table') as HTMLDivElement;
+  const pokerSeatContainer = document.querySelector('.player-seats-container') as HTMLDivElement;
   
   // Remove existing player seats
   document.querySelectorAll('.player-seat').forEach(seat => seat.remove());
   
   // Add player seats
   tableState.players.forEach((p, index) => {
+    // Calculate position based on container dimensions
+    const containerRect = pokerSeatContainer.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    const containerHeight = containerRect.height;
+    
+    // Calculate center point
+    const centerX = containerWidth / 2;
+    const centerY = containerHeight / 2;
+    
+    // Calculate radius (slightly smaller than container)
+    const radiusX = centerX * 0.8;
+    const radiusY = centerY * 0.8;
+    
+    // Calculate angle for this player (distribute evenly around the table)
     const angle = (index / tableState.players.length) * 2 * Math.PI;
-    const x = 400 + 300 * Math.cos(angle);
-    const y = 200 + 150 * Math.sin(angle);
+    
+    // Calculate position (subtract half the seat size for centering)
+    const seatSize = 120; // Size of player seat
+    const x = centerX + radiusX * Math.cos(angle) - (seatSize / 2);
+    const y = centerY + radiusY * Math.sin(angle) - (seatSize / 2);
     
     const seatElement = document.createElement('div');
     seatElement.className = 'player-seat';
@@ -448,8 +468,10 @@ function renderTableState(tableState: TableState): void {
       seatElement.classList.add('active');
     }
     
-    seatElement.style.left = `${x - 60}px`;
-    seatElement.style.top = `${y - 60}px`;
+    // Use percentage-based positioning for better responsiveness
+    seatElement.style.position = 'absolute';
+    seatElement.style.left = `${(x / containerWidth) * 100}%`;
+    seatElement.style.top = `${(y / containerHeight) * 100}%`;
     
     seatElement.innerHTML = `
       <div>${p.name}</div>
@@ -462,7 +484,7 @@ function renderTableState(tableState: TableState): void {
       ${p.isBigBlind ? '<div>BB</div>' : ''}
     `;
     
-    pokerTable.appendChild(seatElement);
+    pokerSeatContainer.appendChild(seatElement);
   });
   
   // Update action buttons
@@ -583,6 +605,8 @@ async function leaveTable(): Promise<void> {
       // Show tables view
       gameContainer.classList.add('hidden');
       tablesContainer.classList.remove('hidden');
+
+      container.classList.remove('hide-title');
       
       // Refresh tables with a slight delay to ensure server has processed the leave
       setTimeout(fetchTables, 500);
@@ -591,35 +615,3 @@ async function leaveTable(): Promise<void> {
     alert(`Failed to leave table: ${error.message}`);
   }
 }
-
-// Add some CSS to the document
-const style = document.createElement('style');
-style.textContent = `
-  .countdown-timer {
-    padding: 10px;
-    background-color: rgba(0, 0, 0, 0.7);
-    border-radius: 5px;
-    color: white;
-    margin: 10px 0;
-    text-align: center;
-    z-index: 1000;
-  }
-  .time-remaining {
-    font-size: 18px;
-    font-weight: bold;
-  }
-  .time-remaining.urgent {
-    color: red;
-    animation: pulse 1s infinite;
-  }
-  .warning-message {
-    color: red;
-    margin-top: 5px;
-  }
-  @keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-  }
-`;
-document.head.appendChild(style);
