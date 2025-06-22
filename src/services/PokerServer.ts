@@ -49,6 +49,9 @@ export class PokerServer {
         case 'getTableState':
           return this.logResponse(this.handleGetTableState(params, id));
         
+        case 'getLearningTableState':
+          return this.logResponse(this.handleGetLearningTableState(params, id));
+        
         case 'performAction':
           return this.logResponse(this.handlePerformAction(params, id));
         
@@ -304,6 +307,65 @@ export class PokerServer {
           isBigBlind: p.isBigBlind,
           isActive: p.isActive,
           hand: p.id === playerId ? p.hand.map(card => card.toString()) : []
+        };
+        return playerView;
+      }),
+      currentPlayerIndex: table.currentPlayerIndex
+    };
+    
+    return {
+      result: tableState,
+      id
+    };
+  }
+  
+  private handleGetLearningTableState(params: any, id: string | number): PokerResponse {
+    const { tableId } = params;
+    
+    if (!tableId) {
+      return {
+        error: {
+          code: -32602,
+          message: 'Invalid params: tableId is required'
+        },
+        id
+      };
+    }
+    
+    const table = this.gameManager.getTable(tableId);
+    if (!table) {
+      return {
+        error: {
+          code: -32602,
+          message: `Table with ID ${tableId} not found`
+        },
+        id
+      };
+    }
+    
+    // LEARNING MODE: Show ALL player cards for mentoring purposes
+    const tableState = {
+      id: table.id,
+      name: table.name,
+      stage: table.stage,
+      pot: table.pot,
+      currentBet: table.currentBet,
+      smallBlind: table.smallBlind,
+      bigBlind: table.bigBlind,
+      communityCards: table.communityCards.map(card => card.toString()),
+      players: table.players.map(p => {
+        const playerView = {
+          id: p.id,
+          name: p.name,
+          chips: p.chips,
+          bet: p.bet,
+          folded: p.folded,
+          isAllIn: p.isAllIn,
+          isDealer: p.isDealer,
+          isSmallBlind: p.isSmallBlind,
+          isBigBlind: p.isBigBlind,
+          isActive: p.isActive,
+          hand: p.hand.map(card => card.toString()) // SHOW ALL HANDS!
         };
         return playerView;
       }),

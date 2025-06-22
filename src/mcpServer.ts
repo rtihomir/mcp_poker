@@ -64,6 +64,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "get_learning_table_status",
+        description: "Get table status with ALL player cards visible (for learning/mentoring)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            table_id: { type: "string" },
+          },
+          required: ["table_id"],
+        },
+      },
+      {
         name: "leave_table",
         description: "Leave a poker table",
         inputSchema: {
@@ -145,32 +156,47 @@ function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function pollUntilPlayerActive(player_id:unknown, table_id:unknown) {
-    let tableState = null;
-    let counter = 0;
-    while(true) {
-        tableState = await sendPokerRequest('getTableState', { 
+// FIXED: Simple function to get table state once without aggressive polling
+async function getTableStateOnce(player_id: unknown, table_id: unknown): Promise<string> {
+    try {
+        const tableState = await sendPokerRequest('getTableState', {
             playerId: player_id,
-            tableId: table_id 
+            tableId: table_id
         });
-        counter ++;
-        if (counter > 120) {
-            break
-        }
-        
-        const currentPlayer = tableState.players.find((p: any) => p.isActive);
-        if (currentPlayer && currentPlayer.id === player_id) {
+        return formatTableState(tableState);
+    } catch (error) {
+        console.error('Error getting table state:', error);
+        return 'Error getting table state';
+    }
+}
+
+// FIXED: Wait for player turn only when needed (for actions), with shorter timeout
+async function waitForPlayerTurn(player_id: unknown, table_id: unknown, maxWaitSeconds = 10): Promise<string> {
+    let counter = 0;
+    while (counter < maxWaitSeconds) {
+        try {
+            const tableState = await sendPokerRequest('getTableState', {
+                playerId: player_id,
+                tableId: table_id
+            });
+            
+            const currentPlayer = tableState.players.find((p: any) => p.isActive);
+            if (currentPlayer && currentPlayer.id === player_id) {
+                return formatTableState(tableState);
+            }
+            
+            await sleep(1000);
+            counter++;
+        } catch (error) {
+            console.error('Error waiting for player turn:', error);
             break;
         }
-        await sleep(1000);
     }
-
-    if (tableState === null) {
-        return '';
-    }
-
-    return formatTableState(tableState);
+    
+    // Return current state even if not player's turn
+    return await getTableStateOnce(player_id, table_id);
 }
+
 function sendPokerRequest(method: string, params: any): Promise<any> {
   return new Promise((resolve, reject) => {
     const request = {
@@ -179,11 +205,7 @@ function sendPokerRequest(method: string, params: any): Promise<any> {
       id: Date.now()
     };
     
-    //console.log(`[Client] Sending request: ${method}`, params);
-    
     socket.emit('action', request, (response: any) => {
-      //console.log(`[Client] Received response for ${method}:`, response);
-      
       if (response.error) {
         console.error(`[Client] Error in ${method}:`, response.error);
         reject(response.error);
@@ -221,8 +243,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       view_text = `Player ${args?.player_id} joined table ${args?.table_id}.\n Game state:\n`;
       
-      // Get table state after joining
-      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
+      // FIXED: Get table state after joining without aggressive polling
+      view_text += await getTableStateOnce(args?.player_id, args?.table_id);
     } 
     else if (request.params.name === "get_table_status") {
       // Get the current state of the table
@@ -232,6 +254,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       
       view_text = `Current status for table ${args?.table_id}:\n`;
+      view_text += formatTableState(tableState);
+    }
+    else if (request.params.name === "get_learning_table_status") {
+      // NEW: Get learning table state with all cards visible
+      const tableState = await sendPokerRequest('getLearningTableState', {
+        tableId: args?.table_id
+      });
+      
+      view_text = `Learning table status for ${args?.table_id} (ALL CARDS VISIBLE):\n`;
       view_text += formatTableState(tableState);
     }
     else if (request.params.name === "leave_table") {
@@ -249,8 +280,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       view_text = `Player ${args?.player_id} action: Check\n Game state:\n`;
       
-      // Get updated table state
-      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
+      // FIXED: Wait briefly for next turn
+      view_text += await waitForPlayerTurn(args?.player_id, args?.table_id, 5);
     } 
     else if (request.params.name === "action_fold") {
       response = await sendPokerRequest('performAction', { 
@@ -260,8 +291,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       view_text = `Player ${args?.player_id} action: Fold\n Game state:\n`;
       
-      // Get updated table state
-      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
+      // FIXED: Just get current state after fold (no need to wait for turn)
+      view_text += await getTableStateOnce(args?.player_id, args?.table_id);
     } 
     else if (request.params.name === "action_bet") {
       response = await sendPokerRequest('performAction', { 
@@ -272,8 +303,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       view_text = `Player ${args?.player_id} action: Bet $${args?.amount}\n Game state:\n`;
       
-      // Get updated table state
-      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
+      // FIXED: Wait briefly for next turn
+      view_text += await waitForPlayerTurn(args?.player_id, args?.table_id, 5);
     } 
     else if (request.params.name === "action_raise") {
       response = await sendPokerRequest('performAction', { 
@@ -284,8 +315,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       view_text = `Player ${args?.player_id} action: Raise to $${args?.amount}\n Game state:\n`;
       
-      // Get updated table state
-      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
+      // FIXED: Wait briefly for next turn
+      view_text += await waitForPlayerTurn(args?.player_id, args?.table_id, 5);
     } 
     else if (request.params.name === "action_call") {
       response = await sendPokerRequest('performAction', { 
@@ -295,8 +326,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
       view_text = `Player ${args?.player_id} action: Call\n Game state:\n`;
       
-      // Get updated table state
-      view_text += await pollUntilPlayerActive(args?.player_id, args?.table_id);
+      // FIXED: Wait briefly for next turn
+      view_text += await waitForPlayerTurn(args?.player_id, args?.table_id, 5);
     } 
     else {
       throw new McpError(ErrorCode.InternalError, "Tool not found");

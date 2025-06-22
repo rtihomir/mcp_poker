@@ -3,3 +3,6 @@ public/js/poker-client.js
 .vercel
 .env
 vercel.json
+node_modules/
+llms-full.txt
+CLAUDE.md
