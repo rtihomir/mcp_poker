@@ -1,7 +1,9 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
-  TextContent
+  SubscribeRequestSchema,
+  TextContent,
+  UnsubscribeRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
 import { io } from "socket.io-client";
 import { z } from 'zod';
@@ -32,14 +34,70 @@ socket.on('connect_error', async (error) => {
 
 socket.on('tableUpdate', async (data) => {
   await logger.debug(`Table update received: ${JSON.stringify(data)}`);
+  
+  // Send notification to subscribed MCP clients
+  if (data.id || data.tableId) {
+    // Use data.id first (which seems to be the table ID in your log), fallback to data.tableId
+    const tableId = data.id || data.tableId;
+    const resourceUri = `poker://${tableId}/state`;
+    
+    await logger.debug(`Checking subscriptions for resource: ${resourceUri}`);
+    await logger.debug(`Current subscriptions: ${JSON.stringify(Array.from(resourceSubscriptions.keys()))}`);
+    
+    if (resourceSubscriptions.has(resourceUri)) {
+      try {
+        // Send resource updated notification to subscribers
+        await server.server.notification({
+          method: "notifications/resources/updated",
+          params: {
+            uri: resourceUri
+          }
+        });
+        
+        await logger.info(`✅ Sent table update notification for: ${tableId} to resource: ${resourceUri}`);
+      } catch (error) {
+        await logger.error(`❌ Error sending table update notification: ${error}`);
+      }
+    } else {
+      await logger.warn(`⚠️ No subscriptions found for resource: ${resourceUri}`);
+    }
+  } else {
+    await logger.warn(`⚠️ Table update received without table ID: ${JSON.stringify(data)}`);
+  }
 });
 
 socket.on('playerAction', async (data) => {
   await logger.debug(`Player action received: ${JSON.stringify(data)}`);
+  
+  // Also send notifications for player actions if they affect table state
+  if (data.id || data.tableId) {
+    // Use data.id first (which seems to be the table ID), fallback to data.tableId
+    const tableId = data.id || data.tableId;
+    const resourceUri = `poker://${tableId}/state`;
+    
+    if (resourceSubscriptions.has(resourceUri)) {
+      try {
+        // Send resource updated notification to subscribers
+        await server.server.notification({
+          method: "notifications/resources/updated",
+          params: {
+            uri: resourceUri
+          }
+        });
+        
+        await logger.info(`✅ Sent player action update notification for: ${tableId}`);
+      } catch (error) {
+        await logger.error(`❌ Error sending player action notification: ${error}`);
+      }
+    } else {
+      await logger.debug(`No subscriptions for player action on resource: ${resourceUri}`);
+    }
+  }
 });
 
-// Track subscribed tables
+// Track subscribed tables and resource subscriptions
 const subscribedTables = new Set<string>();
+const resourceSubscriptions = new Map<string, Set<string>>();
 
 // Helper function to subscribe to table updates
 async function subscribeToTable(tableId: string) {
@@ -57,7 +115,11 @@ const server = new McpServer(
   },
   {
     capabilities: {
-      tools: {}
+      tools: {},
+      resources: {
+        subscribe: true,
+        listChanged: true
+      }
     },
   }
 );
@@ -115,10 +177,15 @@ server.tool("join_table", "Join a poker table", {
     
     // Subscribe to table updates for this table
     if (table_id) {
-      subscribeToTable(table_id as string);
+      await subscribeToTable(table_id as string);
+      
+      // Notify clients that a new resource is available
+      server.sendResourceListChanged();
     }
     
-    let view_text = `Player ${player_id} joined table ${table_id}.\n Game state:\n`;
+    let view_text = `Player ${player_id} joined table ${table_id}.\n`;
+    view_text += `📡 Resource available at: poker://${table_id}/state\n\n`;
+    view_text += `Game state:\n`;
     
     // Get table state after joining without aggressive polling
     view_text += await getTableStateOnce(player_id, table_id);
@@ -462,6 +529,145 @@ server.tool("action_call", "do action call", {
   }
 });
 
+server.tool("list_table_resources", "List all available poker table resources for real-time updates", {
+}, async () => {
+  try {
+    let view_text = `Available table resources:\n\n`;
+    
+    if (subscribedTables.size === 0) {
+      view_text += "No table resources available. Join a table first to create resources.\n";
+    } else {
+      Array.from(subscribedTables).forEach(tableId => {
+        view_text += `📡 poker://${tableId}/state - Real-time updates for table ${tableId}\n`;
+      });
+      view_text += `\nUse these URIs to subscribe to real-time table updates through MCP resources.`;
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: view_text,
+        } as TextContent,
+      ],
+      isError: false,
+    };
+  } catch (error: any) {
+    await logger.error(`Error listing table resources: ${error.message || "Unknown error occurred"}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error: ${error.message || "Unknown error occurred"}`,
+        } as TextContent,
+      ],
+      isError: true,
+    };
+  }
+});
+
+// Register resource template for dynamic poker table resources
+server.resource(
+  "poker_table_state",
+  new ResourceTemplate("poker://{table_id}/state", { list: undefined }),
+  async (uri, variables) => {
+    const tableIdRaw = variables.table_id;
+    const tableIdString = Array.isArray(tableIdRaw) ? tableIdRaw[0] : tableIdRaw;
+    await logger.debug(`Resource template request for table: ${tableIdString}`);
+    
+    // Track this resource as being accessed
+    const resourceUri = uri.href;
+    if (!resourceSubscriptions.has(resourceUri)) {
+      resourceSubscriptions.set(resourceUri, new Set(['default']));
+      await logger.info(`Resource subscribed: ${resourceUri}`);
+    }
+    
+    try {
+      // Subscribe to table updates for monitoring
+      await subscribeToTable(tableIdString);
+      
+      // Get the current state of the table
+      const tableState = await sendPokerRequest('getTableState', {
+        playerId: 'system',
+        tableId: tableIdString
+      });
+
+      return {
+        contents: [
+          {
+            uri: resourceUri,
+            text: JSON.stringify(tableState, null, 2),
+            mimeType: "application/json"
+          }
+        ]
+      };
+    } catch (error) {
+      await logger.error(`Error getting table state for ${tableIdString}: ${error instanceof Error ? error.message : error}`);
+      return {
+        contents: [
+          {
+            uri: resourceUri,
+            text: `Error getting table state: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            mimeType: "text/plain"
+          }
+        ],
+        _meta: {
+          error: true
+        }
+      };
+    }
+  }
+);
+
+// Register subscription request handlers after capabilities are set
+server.server.setRequestHandler(
+  SubscribeRequestSchema,
+  async (request, extra) => {
+    const { uri } = request.params;
+    await logger.info(`🔔 Client subscribing to resource: ${uri}`);
+    
+    // Parse table ID from URI like "poker://table-id/state"
+    const match = uri.match(/^poker:\/\/([^\/]+)\/state$/);
+    if (match) {
+      const tableId = match[1];
+      
+      // Subscribe to the table updates
+      await subscribeToTable(tableId);
+      
+      // Track this subscription
+      if (!resourceSubscriptions.has(uri)) {
+        resourceSubscriptions.set(uri, new Set());
+      }
+      resourceSubscriptions.get(uri)!.add('default');
+      
+      await logger.info(`✅ Successfully subscribed to table updates for: ${tableId}`);
+      await logger.debug(`Current subscriptions: ${JSON.stringify(Array.from(resourceSubscriptions.keys()))}`);
+    } else {
+      await logger.warn(`⚠️ Invalid resource URI pattern: ${uri}`);
+    }
+    
+    return {};
+  }
+);
+
+server.server.setRequestHandler(
+  UnsubscribeRequestSchema,
+  async (request, extra) => {
+    const { uri } = request.params;
+    await logger.info(`Client unsubscribing from resource: ${uri}`);
+    
+    // Remove subscription tracking
+    if (resourceSubscriptions.has(uri)) {
+      resourceSubscriptions.get(uri)!.delete('default');
+      if (resourceSubscriptions.get(uri)!.size === 0) {
+        resourceSubscriptions.delete(uri);
+      }
+    }
+    
+    return {};
+  }
+);
+
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -600,4 +806,77 @@ async function initializeMCPServer() {
 initializeMCPServer().catch(async (error) => {
   await logger.error(`Failed to initialize MCP server: ${error.message}`);
   process.exit(1);
+});
+
+// Test tool to manually trigger resource notifications for debugging
+server.tool("test_notification", "Test sending a resource update notification manually", {
+  table_id: z.string().min(1, "Table ID is required"),
+}, async ({ table_id }) => {
+  try {
+    const resourceUri = `poker://${table_id}/state`;
+    
+    await logger.info(`🧪 Testing notification for resource: ${resourceUri}`);
+    await logger.debug(`Current subscriptions: ${JSON.stringify(Array.from(resourceSubscriptions.keys()))}`);
+    
+    if (resourceSubscriptions.has(resourceUri)) {
+      try {
+        // Send resource updated notification to subscribers
+        await server.server.notification({
+          method: "notifications/resources/updated",
+          params: {
+            uri: resourceUri
+          }
+        });
+        
+        const successMsg = `✅ Test notification sent successfully for: ${resourceUri}`;
+        await logger.info(successMsg);
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: successMsg,
+            } as TextContent,
+          ],
+          isError: false,
+        };
+      } catch (error) {
+        const errorMsg = `❌ Error sending test notification: ${error}`;
+        await logger.error(errorMsg);
+        return {
+          content: [
+            {
+              type: "text",
+              text: errorMsg,
+            } as TextContent,
+          ],
+          isError: true,
+        };
+      }
+    } else {
+      const warningMsg = `⚠️ No subscriptions found for resource: ${resourceUri}. Available subscriptions: ${Array.from(resourceSubscriptions.keys()).join(', ')}`;
+      await logger.warn(warningMsg);
+      
+      return {
+        content: [
+          {
+            type: "text",
+            text: warningMsg,
+          } as TextContent,
+        ],
+        isError: false,
+      };
+    }
+  } catch (error: any) {
+    await logger.error(`Error in test_notification: ${error.message || "Unknown error occurred"}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error: ${error.message || "Unknown error occurred"}`,
+        } as TextContent,
+      ],
+      isError: true,
+    };
+  }
 });
