@@ -2,9 +2,9 @@ import { randomUUID } from 'crypto';
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { BroadcastService } from './services/BroadcastService';
-import { GameManager } from './services/GameManager';
-import { PokerRequest, PokerServer } from './services/PokerServer';
+import { BroadcastService } from './services/BroadcastService.js';
+import { GameManager } from './services/GameManager.js';
+import { PokerRequest, PokerServer } from './services/PokerServer.js';
 
 // Create Express app
 const app = express();

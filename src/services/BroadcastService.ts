@@ -1,5 +1,5 @@
 import { Server as SocketIOServer } from 'socket.io';
-import { GameManager } from './GameManager';
+import { GameManager } from './GameManager.js';
 
 export class BroadcastService {
   private static io: SocketIOServer | null = null;

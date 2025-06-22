@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
-import { Player } from '../models/Player';
-import { Table } from '../models/Table';
-import { BroadcastService } from './BroadcastService';
+import { Player } from '../models/Player.js';
+import { Table } from '../models/Table.js';
+import { BroadcastService } from './BroadcastService.js';
 
 export class GameManager {
   private tables: Map<string, Table> = new Map();

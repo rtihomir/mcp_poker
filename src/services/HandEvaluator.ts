@@ -1,4 +1,4 @@
-import { Card, Rank, Suit } from '../models/Card';
+import { Card, Rank } from '../models/Card.js';
 
 export enum HandRank {
   HIGH_CARD = 0,

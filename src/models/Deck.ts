@@ -1,4 +1,4 @@
-import { Card, Suit, Rank } from './Card';
+import { Card, Rank, Suit } from './Card.js';
 
 export class Deck {
   private cards: Card[] = [];

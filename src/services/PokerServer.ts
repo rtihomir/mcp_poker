@@ -1,5 +1,5 @@
-import { Player, PlayerAction } from '../models/Player';
-import { GameManager } from './GameManager';
+import { Player, PlayerAction } from '../models/Player.js';
+import { GameManager } from './GameManager.js';
 
 export interface PokerRequest {
   method: string;

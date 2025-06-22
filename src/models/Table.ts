@@ -1,8 +1,8 @@
-import { BroadcastService } from '../services/BroadcastService';
-import { HandEvaluator, HandResult } from '../services/HandEvaluator';
-import { Card } from './Card';
-import { Deck } from './Deck';
-import { Player, PlayerAction } from './Player';
+import { BroadcastService } from '../services/BroadcastService.js';
+import { HandEvaluator, HandResult } from '../services/HandEvaluator.js';
+import { Card } from './Card.js';
+import { Deck } from './Deck.js';
+import { Player, PlayerAction } from './Player.js';
 
 export enum GameStage {
   WAITING = "waiting",
