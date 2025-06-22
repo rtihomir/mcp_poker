@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -89,6 +90,7 @@ gameManager.createTable('Advanced Table', 10, 20, 6);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`HAND_DURATION configured to: ${process.env.HAND_DURATION || '120'} seconds`);
 });
 
 // Export functions for backward compatibility

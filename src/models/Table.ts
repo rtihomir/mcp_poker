@@ -30,7 +30,7 @@ export class Table {
   minPlayers: number = 2;
   // Add timer properties
   private actionTimer: NodeJS.Timeout | null = null;
-  private actionTimeoutSeconds: number = 120;
+  private actionTimeoutSeconds: number;
   
   constructor(id: string, name: string, smallBlind: number = 5, bigBlind: number = 10, maxPlayers: number = 9) {
     this.id = id;
@@ -38,6 +38,10 @@ export class Table {
     this.smallBlind = smallBlind;
     this.bigBlind = bigBlind;
     this.maxPlayers = maxPlayers;
+    
+    // Initialize timer from environment variable
+    const handDuration = parseInt(process.env.HAND_DURATION || '120');
+    this.actionTimeoutSeconds = handDuration;
   }
 
   addPlayer(player: Player): boolean {
@@ -299,6 +303,12 @@ export class Table {
     // Make sure to clear previous timer first
     this.clearActionTimer();
     
+    // Check if timer is disabled (HAND_DURATION <= 0)
+    if (this.actionTimeoutSeconds <= 0) {
+      console.log('Timer disabled (HAND_DURATION <= 0)');
+      return;
+    }
+    
     // Record the start time
     this.actionTimerStartTime = Date.now();
     
@@ -541,7 +551,7 @@ export class Table {
 
   // Add method to get remaining time
   private getRemainingActionTime(): number {
-    if (!this.actionTimer) return 0;
+    if (!this.actionTimer || this.actionTimeoutSeconds <= 0) return 0;
     
     const elapsedTime = (Date.now() - this.actionTimerStartTime) / 1000;
     return Math.max(0, this.actionTimeoutSeconds - elapsedTime);
