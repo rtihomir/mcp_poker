@@ -6,3 +6,4 @@ vercel.json
 node_modules/
 llms-full.txt
 CLAUDE.md
+*.log
