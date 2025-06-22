@@ -1,9 +1,8 @@
+import { BroadcastService } from '../services/BroadcastService';
+import { HandEvaluator, HandResult } from '../services/HandEvaluator';
 import { Card } from './Card';
 import { Deck } from './Deck';
 import { Player, PlayerAction } from './Player';
-import { HandEvaluator, HandResult } from '../services/HandEvaluator';
-
-import { broadcastTableUpdate } from '../index';
 
 export enum GameStage {
   WAITING = "waiting",
@@ -52,7 +51,7 @@ export class Table {
       this.startGame();
     }
     
-    broadcastTableUpdate(this.id);
+    BroadcastService.broadcastTableUpdate(this.id);
     return true;
   }
 
@@ -68,7 +67,7 @@ export class Table {
       this.stage = GameStage.WAITING;
     }
     
-    broadcastTableUpdate(this.id);
+    BroadcastService.broadcastTableUpdate(this.id);
     return true;
   }
 
@@ -155,7 +154,7 @@ export class Table {
           // Move to the next stage directly
           player.isActive = false;
           this.moveToNextStage();
-          broadcastTableUpdate(this.id);
+          BroadcastService.broadcastTableUpdate(this.id);
           return true;
         }
         break;
@@ -224,7 +223,7 @@ export class Table {
     this.moveToNextPlayer();
     
     // Broadcast the table update after the action
-    broadcastTableUpdate(this.id);
+    BroadcastService.broadcastTableUpdate(this.id);
     
     return true;
   }
@@ -245,13 +244,13 @@ export class Table {
       this.stage = GameStage.SHOWDOWN;
       
       // Broadcast the update so players can see the winner
-      broadcastTableUpdate(this.id);
+      BroadcastService.broadcastTableUpdate(this.id);
       
       // Start a new game after a delay
       console.log("Starting new game in 5 seconds");
       setTimeout(() => {
         this.startGame();
-        broadcastTableUpdate(this.id);
+        BroadcastService.broadcastTableUpdate(this.id);
       }, 5000);
       return;
     }
@@ -287,7 +286,7 @@ export class Table {
     this.setActionTimer();
     
     // Broadcast update to let clients know whose turn it is
-    broadcastTableUpdate(this.id);
+    BroadcastService.broadcastTableUpdate(this.id);
   }
 
   // Add method to set the timer
@@ -418,12 +417,12 @@ export class Table {
         this.determineWinner();
 
         // Broadcast the update so players can see the winner
-        broadcastTableUpdate(this.id);
+        BroadcastService.broadcastTableUpdate(this.id);
         
         console.log("Starting new game in 5 seconds");
         setTimeout(() => {
             this.startGame();
-            broadcastTableUpdate(this.id);
+            BroadcastService.broadcastTableUpdate(this.id);
         }, 5000);
         return;
         
@@ -455,7 +454,7 @@ export class Table {
     this.setActionTimer();
     
     // Broadcast the update so clients know whose turn it is
-    broadcastTableUpdate(this.id);
+    BroadcastService.broadcastTableUpdate(this.id);
   }
 
   determineWinner(): void {

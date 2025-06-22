@@ -5,13 +5,48 @@ import {
   ErrorCode,
   ListToolsRequestSchema,
   McpError,
-  ImageContent,
   TextContent
 } from "@modelcontextprotocol/sdk/types.js";
-import { io } from "socket.io-client"
+import { io } from "socket.io-client";
+import { logger, LogLevel } from "./services/FileLoger";
 
-// Configure socket.io client with logging disabled
+// Set logger to DEBUG level to capture all events
+logger.setLogLevel(LogLevel.DEBUG);
+
+// Configure socket.io client with logging enabled for debugging
 const socket = io('http://localhost:3000', {});
+
+socket.on('connect', async () => {
+  await logger.info(`MCP Server connected to poker server with socket ID: ${socket.id}`);
+});
+
+socket.on('disconnect', async (reason) => {
+  await logger.warn(`MCP Server disconnected from poker server: ${reason}`);
+});
+
+socket.on('connect_error', async (error) => {
+  await logger.error(`MCP Server connection error: ${error.message}`);
+});
+
+socket.on('tableUpdate', async (data) => {
+  await logger.debug(`Table update received: ${JSON.stringify(data)}`);
+});
+
+socket.on('playerAction', async (data) => {
+  await logger.debug(`Player action received: ${JSON.stringify(data)}`);
+});
+
+// Track subscribed tables
+const subscribedTables = new Set<string>();
+
+// Helper function to subscribe to table updates
+async function subscribeToTable(tableId: string) {
+  if (!subscribedTables.has(tableId)) {
+    socket.emit('subscribe', tableId);
+    subscribedTables.add(tableId);
+    await logger.info(`MCP Server subscribed to table: ${tableId}`);
+  }
+}
 
 const server = new Server(
   {
@@ -165,7 +200,7 @@ async function getTableStateOnce(player_id: unknown, table_id: unknown): Promise
         });
         return formatTableState(tableState);
     } catch (error) {
-        console.error('Error getting table state:', error);
+        await logger.error(`Error getting table state: ${error}`);
         return 'Error getting table state';
     }
 }
@@ -188,7 +223,7 @@ async function waitForPlayerTurn(player_id: unknown, table_id: unknown, maxWaitS
             await sleep(1000);
             counter++;
         } catch (error) {
-            console.error('Error waiting for player turn:', error);
+            await logger.error(`Error waiting for player turn: ${error}`);
             break;
         }
     }
@@ -207,7 +242,7 @@ function sendPokerRequest(method: string, params: any): Promise<any> {
     
     socket.emit('action', request, (response: any) => {
       if (response.error) {
-        console.error(`[Client] Error in ${method}:`, response.error);
+        logger.error(`Error in ${method}: ${JSON.stringify(response.error)}`);
         reject(response.error);
       } else {
         resolve(response.result);
@@ -241,12 +276,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         playerId: args?.player_id,
         tableId: args?.table_id
       });
+      
+      // Subscribe to table updates for this table
+      if (args?.table_id) {
+        subscribeToTable(args.table_id as string);
+      }
+      
       view_text = `Player ${args?.player_id} joined table ${args?.table_id}.\n Game state:\n`;
       
       // FIXED: Get table state after joining without aggressive polling
       view_text += await getTableStateOnce(args?.player_id, args?.table_id);
     } 
     else if (request.params.name === "get_table_status") {
+      // Subscribe to table updates for monitoring
+      if (args?.table_id) {
+        subscribeToTable(args.table_id as string);
+      }
+      
       // Get the current state of the table
       const tableState = await sendPokerRequest('getTableState', {
         playerId: args?.player_id,
@@ -257,6 +303,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       view_text += formatTableState(tableState);
     }
     else if (request.params.name === "get_learning_table_status") {
+      // Subscribe to table updates for monitoring
+      if (args?.table_id) {
+        subscribeToTable(args.table_id as string);
+      }
+      
       // NEW: Get learning table state with all cards visible
       const tableState = await sendPokerRequest('getLearningTableState', {
         tableId: args?.table_id
@@ -333,7 +384,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new McpError(ErrorCode.InternalError, "Tool not found");
     }
   } catch (error: any) {
-    console.error("Error handling tool request:", error);
+    await logger.error(`Error handling tool request: ${error.message || "Unknown error occurred"}`);
     view_text = `Error: ${error.message || "Unknown error occurred"}`;
     
     return {

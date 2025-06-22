@@ -1,8 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Player } from '../models/Player';
 import { Table } from '../models/Table';
-import { HandEvaluator } from './HandEvaluator';
-import { broadcastPlayerAction } from '../index';
+import { BroadcastService } from './BroadcastService';
 
 export class GameManager {
   private tables: Map<string, Table> = new Map();
@@ -95,7 +94,7 @@ export class GameManager {
       // Add error handling to get more information about failures
       const result = table.handlePlayerAction(playerId, action as any, amount);
       if (result) {
-        broadcastPlayerAction(table.id, playerId, action, amount);
+        BroadcastService.broadcastPlayerAction(table.id, playerId, action, amount);
       }
       return result;
     } catch (error) {

@@ -1,9 +1,10 @@
+import { randomUUID } from 'crypto';
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import { BroadcastService } from './services/BroadcastService';
 import { GameManager } from './services/GameManager';
-import { PokerServer, PokerRequest, PokerResponse } from './services/PokerServer';
-import { randomUUID } from 'crypto';
+import { PokerRequest, PokerServer } from './services/PokerServer';
 
 // Create Express app
 const app = express();
@@ -76,6 +77,9 @@ io.on('connection', (socket) => {
   });
 });
 
+// Initialize broadcast service after Socket.IO setup
+BroadcastService.initialize(io, gameManager);
+
 // Create some initial tables
 gameManager.createTable('Beginner Table', 1, 2, 6);
 gameManager.createTable('Intermediate Table', 5, 10, 9);
@@ -87,54 +91,11 @@ server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-// Function to broadcast table updates
+// Export functions for backward compatibility
 export function broadcastTableUpdate(tableId: string): void {
-  console.log(`Broadcasting table update for table ${tableId}`);
-  const table = gameManager.getTable(tableId);
-  if (table) {
-    // Use the table's toJSON method instead of manually constructing the object
-    io.to(`table:${tableId}`).emit('tableUpdate', table.toJSON());
-  }
+  BroadcastService.broadcastTableUpdate(tableId);
 }
 
-// Function to broadcast player actions
 export function broadcastPlayerAction(tableId: string, playerId: string, action: string, amount: number = 0): void {
-  console.log(`Broadcasting player action for table ${tableId}: ${playerId} ${action} ${amount}`);
-  const table = gameManager.getTable(tableId);
-  if (table) {
-    const player = table.players.find(p => p.id === playerId);
-    if (player) {
-      const playerName = player.name;
-      const actionMessage = formatActionMessage(playerName, action, amount);
-      
-      io.to(`table:${tableId}`).emit('playerAction', {
-        playerId,
-        playerName,
-        action,
-        amount,
-        message: actionMessage,
-        timestamp: Date.now()
-      });
-    }
-  }
-}
-
-// Helper function to format action messages
-function formatActionMessage(playerName: string, action: string, amount: number): string {
-  switch(action.toLowerCase()) {
-    case 'fold':
-      return `${playerName} folded`;
-    case 'check':
-      return `${playerName} checked`;
-    case 'call':
-      return `${playerName} called`;
-    case 'bet':
-      return `${playerName} bet $${amount}`;
-    case 'raise':
-      return `${playerName} raised to $${amount}`;
-    case 'all-in':
-      return `${playerName} went ALL IN with $${amount}`;
-    default:
-      return `${playerName} performed ${action}`;
-  }
+  BroadcastService.broadcastPlayerAction(tableId, playerId, action, amount);
 }
